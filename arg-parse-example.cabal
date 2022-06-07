@@ -1,0 +1,40 @@
+cabal-version:      2.4
+name:               arg-parse-example
+version:            0.1.0.0
+
+-- A short (one-line) description of the package.
+synopsis:           Example for parsing multi-command arguments in optparse-applicative.
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+-- The license under which the package is released.
+license:            Apache-2.0
+author:             Johan Hidding
+maintainer:         j.hidding@esciencecenter.nl
+
+-- A copyright notice.
+-- copyright:
+category:           Demo
+extra-source-files: CHANGELOG.md
+
+executable hello
+    main-is:          Main.hs
+
+    -- Modules included in this executable, other than Main.
+    other-modules:    Commands.Common
+                      Commands.Hello
+                      Commands.Goodbye
+
+    -- LANGUAGE extensions used by modules in this package.
+    default-extensions:
+                      NoImplicitPrelude OverloadedStrings
+    build-depends:    base ^>=4.14.3.0
+                    , optparse-applicative ^>=0.17
+                    , rio ^>=0.1.22
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    ghc-options: -Wall

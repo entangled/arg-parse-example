@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Johan Hidding" />
+  <title>Structuring a larger command-line interface in Haskell</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="theme.css" />
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Structuring a larger command-line interface in Haskell</h1>
+<p class="subtitle">a small foray into optparse-applicative</p>
+<p class="author">Johan Hidding</p>
+<!--        <div id="dark-mode-toggle">
+                <p>Dark mode: <button class="dark-mode-button"
+                        aria-label="Toggle dark mode"
+                        onclick="toggle_dark_mode()">
+                        <span></span><span></span>
+                </button></p>
+</div> -->
+</header>
+<div class="row">
+        <div class="col-6 col-s-9" id="main">
+<p>I’ve been using <code>optparse-applicative</code> to do my command-line parsing in Haskell. At some point, an application may outgrow a certain size, where you want to structure the command-line parsing and handling into several modules, such that each module can handle a single sub-command.</p>
+<p>Let’s build a small greeter program to see how to make this work. We get a project structure as follows:</p>
+<pre><code>▾ app/
+  ▾ Commands/
+      Common.hs
+      Goodbye.hs
+      Hello.hs
+    Main.hs</code></pre>
+<p>Here, module <code>Commands.Common</code> contains options that are used by all other sub-commands, and <code>Commands.Goodbye</code> and <code>Commands.Hello</code> are the two actual sub-commands.</p>
+<p>There is a catch-all solution, namely parsing your options to <code>IO ()</code> and then <code>join</code> the resulting IO action after parsing. Somehow, this solution vibes me the wrong way.</p>
+<section id="the-common-module" class="level2">
+<h2>The <code>Common</code> module</h2>
+<p>Now, we suppose that the options in the <code>Common</code> section may also effect code in <code>Goodbye</code> and <code>Hello</code> in such a way that each sub-command needs to have the common information at hand. This means that <code>Hello</code> and <code>Goodbye</code> import from <code>Common</code> but we need a argument sum-datatype that contains either <code>Hello</code> or <code>Goodbye</code> specific arguments. Note however, that circular imports are not possible in Haskell. We’ll have to abstract out the command-specific bits fromm <code>Common</code>.</p>
+<div class="named-code-block">
+<p>file:app/Commands/Common.hs</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="dt">Commands.Common</span> <span class="kw">where</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">RIO</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">RIO.ByteString</span> <span class="kw">as</span> <span class="dt">B</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">RIO.Text</span> <span class="kw">as</span> <span class="dt">Text</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Args</span> a <span class="ot">=</span> <span class="dt">Args</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> versionFlag ::</span> <span class="dt">Bool</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> verboseFlag ::</span> <span class="dt">Bool</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> subArgs ::</span> a }</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="ot"> ::</span> (<span class="dt">MonadIO</span> m) <span class="ot">=&gt;</span> <span class="dt">Text</span> <span class="ot">-&gt;</span> m ()</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span> text <span class="ot">=</span> B.hPutStr stdout (Text.encodeUtf8 text)</span></code></pre></div>
+</div>
+<p>Notice, I’m using <code>RIO</code> instead of <code>Prelude</code>. Now for the <code>Hello</code> part, I’d like to define an additional <code>Args</code> type that contains just the arguments that are specific to that sub-command.</p>
+</section>
+<section id="defining-a-sub-command" class="level2">
+<h2>Defining a sub-command</h2>
+<div class="named-code-block">
+<p>file:app/Commands/Hello.hs</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="dt">Commands.Hello</span> <span class="kw">where</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">RIO</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Common</span> <span class="kw">as</span> <span class="dt">Common</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Options.Applicative</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    ( <span class="dt">Parser</span>, long, short, help, metavar, value</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    , option, auto, (<span class="op">&lt;**&gt;</span>), helper)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Args</span> <span class="ot">=</span> <span class="dt">Args</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> name ::</span> <span class="dt">Text</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="ot">parseArgs ::</span> <span class="dt">Parser</span> <span class="dt">Args</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>parseArgs <span class="ot">=</span> <span class="dt">Args</span> <span class="op">&lt;$&gt;</span> option auto ( long <span class="st">&quot;name&quot;</span> </span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>                                <span class="op">&lt;&gt;</span> short <span class="ch">&#39;n&#39;</span> </span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>                                <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;NAME&quot;</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>                                <span class="op">&lt;&gt;</span> value <span class="st">&quot;World&quot;</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>                                <span class="op">&lt;&gt;</span> help <span class="st">&quot;Name of sender.&quot;</span> )</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>                <span class="op">&lt;**&gt;</span> helper</span></code></pre></div>
+</div>
+<p>So far, so good. Now, what will by the type of the <code>run</code> function in this module? I’m currently settling on</p>
+<div class="named-code-block">
+<p>«hello»</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ot">run ::</span> (<span class="dt">HasLogFunc</span> env) <span class="ot">=&gt;</span> <span class="dt">Common.Args</span> <span class="dt">Args</span> <span class="ot">-&gt;</span> <span class="dt">RIO</span> env ()</span></code></pre></div>
+</div>
+<p>with the following implementation that doesn’t really matter.</p>
+<div class="named-code-block">
+<p>«hello»</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>run args <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    logInfo <span class="st">&quot;Printing message&quot;</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    Common.print msg</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">where</span> msg <span class="ot">=</span> <span class="st">&quot;Hello, &quot;</span> <span class="op">&lt;&gt;</span> name subArgs <span class="op">&lt;&gt;</span> <span class="st">&quot;!\n&quot;</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>          subArgs <span class="ot">=</span> Common.subArgs args</span></code></pre></div>
+</div>
+<p>I’ve considered parsing to a <code>Common.Args a</code>, where <code>a</code> is the sum-type that should then be defined in <code>Main</code>. Then we need a <code>HasArgs a</code> data class, for retrieving the desired arguments. The problem here, is that the <code>HasArgs</code> class should have a getter method that returns a <code>Maybe</code>, since the actual sub-command is not captured by the type system. The current solution has the advantage of being simple enough.</p>
+<p>A very similar afair in <code>Goodbye</code>:</p>
+<div class="named-code-block">
+<p>file:app/Commands/Goodbye.hs</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="dt">Commands.Goodbye</span> <span class="kw">where</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">RIO</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Common</span> <span class="kw">as</span> <span class="dt">Common</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Options.Applicative</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    ( <span class="dt">Parser</span>, long, short, help, str, metavar</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    , argument, strOption, (<span class="op">&lt;**&gt;</span>), helper )</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">Args</span> <span class="ot">=</span> <span class="dt">Args</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> name ::</span> <span class="dt">Text</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    ,<span class="ot"> from ::</span> <span class="dt">Maybe</span> <span class="dt">Text</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="ot">parseArgs ::</span> <span class="dt">Parser</span> <span class="dt">Args</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>parseArgs <span class="ot">=</span> <span class="dt">Args</span> <span class="op">&lt;$&gt;</span> argument str ( metavar <span class="st">&quot;NAME&quot;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Name of sender.&quot;</span> )</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>                 <span class="op">&lt;*&gt;</span> optional ( strOption ( long <span class="st">&quot;from&quot;</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>                                         <span class="op">&lt;&gt;</span> short <span class="ch">&#39;f&#39;</span> </span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>                                         <span class="op">&lt;&gt;</span> metavar <span class="st">&quot;FROM&quot;</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>                                         <span class="op">&lt;&gt;</span> help <span class="st">&quot;Identity of sender.&quot;</span> ) )</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>                <span class="op">&lt;**&gt;</span> helper</span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="ot">run ::</span> (<span class="dt">HasLogFunc</span> env) <span class="ot">=&gt;</span> <span class="dt">Common.Args</span> <span class="dt">Args</span> <span class="ot">-&gt;</span> <span class="dt">RIO</span> env ()</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>run args <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>    logInfo <span class="st">&quot;Printing message&quot;</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    Common.print msg</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    <span class="kw">where</span> msg <span class="ot">=</span> <span class="st">&quot;Goodbye &quot;</span> <span class="op">&lt;&gt;</span> name subArgs</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>             <span class="op">&lt;&gt;</span> <span class="fu">maybe</span> <span class="st">&quot;&quot;</span> (<span class="st">&quot;, from &quot;</span> <span class="op">&lt;&gt;</span>) (from subArgs) <span class="op">&lt;&gt;</span> <span class="st">&quot;!\n&quot;</span></span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>          subArgs <span class="ot">=</span> Common.subArgs args</span></code></pre></div>
+</div>
+</section>
+<section id="the-main-module" class="level2">
+<h2>The <code>Main</code> module</h2>
+<p>The <code>Main</code> module contains the plumming for setting up the <code>RIO</code> environment, and then dispatches to the correct sub-command.</p>
+<div class="named-code-block">
+<p>file:app/Main.hs</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="dt">Main</span> <span class="kw">where</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">RIO</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="dt">Options.Applicative</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    ( <span class="dt">Parser</span>, switch, long, short, help, subparser</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    , command, info, progDesc, execParser</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    , (<span class="op">&lt;**&gt;</span>), helper, fullDesc, header )</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Common</span> <span class="kw">as</span> <span class="dt">Common</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Hello</span> <span class="kw">as</span> <span class="dt">Hello</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Goodbye</span> <span class="kw">as</span> <span class="dt">Goodbye</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">SubCommand</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">CmdHello</span> <span class="dt">Hello.Args</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> <span class="dt">CmdGoodbye</span> <span class="dt">Goodbye.Args</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a><span class="ot">parseArgs ::</span> <span class="dt">Parser</span> (<span class="dt">Common.Args</span> <span class="dt">SubCommand</span>)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>parseArgs <span class="ot">=</span> <span class="dt">Common.Args</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;$&gt;</span> switch (long <span class="st">&quot;version&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Show version.&quot;</span>)</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> switch (long <span class="st">&quot;verbose&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;V&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Be verbose.&quot;</span>)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> subparser</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        (  command <span class="st">&quot;hello&quot;</span>   (info (<span class="dt">CmdHello</span> <span class="op">&lt;$&gt;</span> Hello.parseArgs)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Hello&quot;</span>))</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="op">&lt;&gt;</span> command <span class="st">&quot;goodbye&quot;</span> (info (<span class="dt">CmdGoodbye</span> <span class="op">&lt;$&gt;</span> Goodbye.parseArgs)</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Goodbye&quot;</span>))</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>        )</span></code></pre></div>
+</div>
+<p>The environment structure will only contain the logger function here.</p>
+<div class="named-code-block">
+<p>«main»</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">App</span> <span class="ot">=</span> <span class="dt">App</span> </span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    {<span class="ot"> logFunc&#39; ::</span> <span class="dt">LogFunc</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">HasLogFunc</span> <span class="dt">App</span> <span class="kw">where</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    logFuncL <span class="ot">=</span> lens logFunc&#39; (\x y <span class="ot">-&gt;</span> x { logFunc&#39; <span class="ot">=</span> y })</span></code></pre></div>
+</div>
+<p>To dispatch to the correct sub-command runner, we replace the <code>Common.Args SubCommand</code> record with a <code>Common.Args Hello.Args</code> (or <code>Goodbye</code> equivalent). This is done using record update syntax.</p>
+<div class="named-code-block">
+<p>«main»</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">run ::</span> <span class="dt">Common.Args</span> <span class="dt">SubCommand</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>run args <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    logOptions <span class="ot">&lt;-</span> setLogUseTime <span class="dt">True</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>              <span class="op">&lt;$&gt;</span> logOptionsHandle stderr (Common.verboseFlag args)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    withLogFunc logOptions <span class="op">$</span> \lf <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>        runRIO (<span class="dt">App</span> lf) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Running sub-command&quot;</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>            <span class="kw">case</span> Common.subArgs args <span class="kw">of</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdHello</span>   x <span class="ot">-&gt;</span> Hello.run   (args { Common.subArgs <span class="ot">=</span> x })</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdGoodbye</span> x <span class="ot">-&gt;</span> Goodbye.run (args { Common.subArgs <span class="ot">=</span> x })</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Until next time&quot;</span></span></code></pre></div>
+</div>
+<p>The remaining <code>main</code> function, parses arguments and passes those on to the <code>run</code> function.</p>
+<div class="named-code-block">
+<p>«main»</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> run <span class="op">=&lt;&lt;</span> execParser opts</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">where</span> opts <span class="ot">=</span> info (parseArgs <span class="op">&lt;**&gt;</span> helper)</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>                    ( fullDesc</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> progDesc <span class="st">&quot;Print a greeting.&quot;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> header <span class="st">&quot;hello - a test for optparse-applicative, with sub-commands&quot;</span> )</span></code></pre></div>
+</div>
+</section>
+        </div>
+         <div class="col-3 col-s-3 menu" id="menu-container">
+                <div id="menu"><nav id="TOC" role="doc-toc">
+                                <ul>
+                                <li><a href="#the-common-module">The <code>Common</code> module</a></li>
+                                <li><a href="#defining-a-sub-command">Defining a sub-command</a></li>
+                                <li><a href="#the-main-module">The <code>Main</code> module</a></li>
+                                </ul>
+                </nav></div>
+        </div> 
+</div>
+<div class="footer">
+Powered by <a href="https://entangled.github.io">Entangled</a> and <a href="https://pandoc.org">Pandoc</a>
+</div>
+<!-- <script>
+function toggle_dark_mode() {
+    var app = document.getElementsByTagName("BODY")[0];
+    if (localStorage.darkMode == "dark") {
+	localStorage.darkMode = "light";
+	app.setAttribute("dark-mode", "light");
+    } else {
+	localStorage.darkMode = "dark";
+	app.setAttribute("dark-mode", "dark");
+    }
+}
+</script> -->
+</body>
+</html>
