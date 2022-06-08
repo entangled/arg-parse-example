@@ -106,10 +106,10 @@
       Hello.hs
     Main.hs</code></pre>
 <p>Here, module <code>Commands.Common</code> contains options that are used by all other sub-commands, and <code>Commands.Goodbye</code> and <code>Commands.Hello</code> are the two actual sub-commands.</p>
-<p>There is a catch-all solution, namely parsing your options to <code>IO ()</code> and then <code>join</code> the resulting IO action after parsing. Somehow, this solution vibes me the wrong way.</p>
+<p>There is a catch-all solution, namely parsing your options to <code>IO ()</code> and then <code>join</code> the resulting IO action after parsing. Somehow, this solution vibes me the wrong way. I rather parse to an actual data structure that reflects the possible options and go from there.</p>
 <section id="the-common-module" class="level2">
 <h2>The <code>Common</code> module</h2>
-<p>Now, we suppose that the options in the <code>Common</code> section may also effect code in <code>Goodbye</code> and <code>Hello</code> in such a way that each sub-command needs to have the common information at hand. This means that <code>Hello</code> and <code>Goodbye</code> import from <code>Common</code> but we need a argument sum-datatype that contains either <code>Hello</code> or <code>Goodbye</code> specific arguments. Note however, that circular imports are not possible in Haskell. We’ll have to abstract out the command-specific bits fromm <code>Common</code>.</p>
+<p>Now, we suppose that the options in the <code>Common</code> section may also effect code in <code>Goodbye</code> and <code>Hello</code> in such a way that each sub-command needs to have the common information at hand. This means that <code>Hello</code> and <code>Goodbye</code> import from <code>Common</code> but we need a argument sum-datatype that contains either <code>Hello</code> or <code>Goodbye</code> specific arguments. Note however, that circular imports are not possible in Haskell. We’ll have to abstract out the command-specific bits from <code>Common</code>.</p>
 <div class="named-code-block">
 <p>file:app/Commands/Common.hs</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">module</span> <span class="dt">Commands.Common</span> <span class="kw">where</span></span>
@@ -217,19 +217,20 @@
 <span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="kw">qualified</span> <span class="dt">Commands.Goodbye</span> <span class="kw">as</span> <span class="dt">Goodbye</span></span>
 <span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="kw">data</span> <span class="dt">SubCommand</span></span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">CmdHello</span> <span class="dt">Hello.Args</span></span>
-<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> <span class="dt">CmdGoodbye</span> <span class="dt">Goodbye.Args</span></span>
-<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a><span class="ot">parseArgs ::</span> <span class="dt">Parser</span> (<span class="dt">Common.Args</span> <span class="dt">SubCommand</span>)</span>
-<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>parseArgs <span class="ot">=</span> <span class="dt">Common.Args</span></span>
-<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;$&gt;</span> switch (long <span class="st">&quot;version&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Show version.&quot;</span>)</span>
-<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> switch (long <span class="st">&quot;verbose&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;V&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Be verbose.&quot;</span>)</span>
-<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> subparser</span>
-<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        (  command <span class="st">&quot;hello&quot;</span>   (info (<span class="dt">CmdHello</span> <span class="op">&lt;$&gt;</span> Hello.parseArgs)</span>
-<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Hello&quot;</span>))</span>
-<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="op">&lt;&gt;</span> command <span class="st">&quot;goodbye&quot;</span> (info (<span class="dt">CmdGoodbye</span> <span class="op">&lt;$&gt;</span> Goodbye.parseArgs)</span>
-<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Goodbye&quot;</span>))</span>
-<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>        )</span></code></pre></div>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="ot">=</span> <span class="dt">NoCommand</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> <span class="dt">CmdHello</span> <span class="dt">Hello.Args</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">|</span> <span class="dt">CmdGoodbye</span> <span class="dt">Goodbye.Args</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="ot">parseArgs ::</span> <span class="dt">Parser</span> (<span class="dt">Common.Args</span> <span class="dt">SubCommand</span>)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>parseArgs <span class="ot">=</span> <span class="dt">Common.Args</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;$&gt;</span> switch (long <span class="st">&quot;version&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;v&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Show version.&quot;</span>)</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> switch (long <span class="st">&quot;verbose&quot;</span> <span class="op">&lt;&gt;</span> short <span class="ch">&#39;V&#39;</span> <span class="op">&lt;&gt;</span> help <span class="st">&quot;Be verbose.&quot;</span>)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;*&gt;</span> ( subparser</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>          (  command <span class="st">&quot;hello&quot;</span>   (info (<span class="dt">CmdHello</span> <span class="op">&lt;$&gt;</span> Hello.parseArgs)</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Hello&quot;</span>))</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>          <span class="op">&lt;&gt;</span> command <span class="st">&quot;goodbye&quot;</span> (info (<span class="dt">CmdGoodbye</span> <span class="op">&lt;$&gt;</span> Goodbye.parseArgs)</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>                                   (progDesc <span class="st">&quot;Say Goodbye&quot;</span>)) )</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>       <span class="op">&lt;|&gt;</span> <span class="fu">pure</span> <span class="dt">NoCommand</span> )</span></code></pre></div>
 </div>
 <p>The environment structure will only contain the logger function here.</p>
 <div class="named-code-block">
@@ -241,30 +242,49 @@
 <span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">instance</span> <span class="dt">HasLogFunc</span> <span class="dt">App</span> <span class="kw">where</span></span>
 <span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    logFuncL <span class="ot">=</span> lens logFunc&#39; (\x y <span class="ot">-&gt;</span> x { logFunc&#39; <span class="ot">=</span> y })</span></code></pre></div>
 </div>
+<p>Add two escape hatches for printing the version info and the case where no command was given.</p>
+<div class="named-code-block">
+<p>«main»</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">printVersion ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>printVersion <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    Common.print</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;hello (Entangled example program) 1.0\n\</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="st">        \Copyright © 2022 Netherlands eScience Center.\n\</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="st">        \Licensed under the Apache License, Version 2.0.\n&quot;</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    exitSuccess</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="ot">printNoCommand ::</span> (<span class="dt">MonadIO</span> m) <span class="ot">=&gt;</span> m ()</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>printNoCommand <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    Common.print</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;No command given. Run `hello -h` or `hello --help` to see usage.\n&quot;</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    exitFailure</span></code></pre></div>
+</div>
 <p>To dispatch to the correct sub-command runner, we replace the <code>Common.Args SubCommand</code> record with a <code>Common.Args Hello.Args</code> (or <code>Goodbye</code> equivalent). This is done using record update syntax.</p>
 <div class="named-code-block">
 <p>«main»</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ot">run ::</span> <span class="dt">Common.Args</span> <span class="dt">SubCommand</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>run args <span class="ot">=</span> <span class="kw">do</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    logOptions <span class="ot">&lt;-</span> setLogUseTime <span class="dt">True</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>              <span class="op">&lt;$&gt;</span> logOptionsHandle stderr (Common.verboseFlag args)</span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    withLogFunc logOptions <span class="op">$</span> \lf <span class="ot">-&gt;</span> <span class="kw">do</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>        runRIO (<span class="dt">App</span> lf) <span class="op">$</span> <span class="kw">do</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Running sub-command&quot;</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>            <span class="kw">case</span> Common.subArgs args <span class="kw">of</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdHello</span>   x <span class="ot">-&gt;</span> Hello.run   (args { Common.subArgs <span class="ot">=</span> x })</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdGoodbye</span> x <span class="ot">-&gt;</span> Goodbye.run (args { Common.subArgs <span class="ot">=</span> x })</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Until next time&quot;</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">run ::</span> <span class="dt">Common.Args</span> <span class="dt">SubCommand</span> <span class="ot">-&gt;</span> <span class="dt">IO</span> ()</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>run args <span class="ot">=</span> <span class="kw">do</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    when (Common.versionFlag args) printVersion</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    logOptions <span class="ot">&lt;-</span> setLogUseTime <span class="dt">True</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>              <span class="op">&lt;$&gt;</span> logOptionsHandle stderr (Common.verboseFlag args)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    withLogFunc logOptions <span class="op">$</span> \lf <span class="ot">-&gt;</span> <span class="kw">do</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        runRIO (<span class="dt">App</span> lf) <span class="op">$</span> <span class="kw">do</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Running sub-command&quot;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>            <span class="kw">case</span> Common.subArgs args <span class="kw">of</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdHello</span>   x <span class="ot">-&gt;</span> Hello.run   (args { Common.subArgs <span class="ot">=</span> x })</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>                <span class="dt">CmdGoodbye</span> x <span class="ot">-&gt;</span> Goodbye.run (args { Common.subArgs <span class="ot">=</span> x })</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>                <span class="dt">NoCommand</span>    <span class="ot">-&gt;</span> printNoCommand</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>            logDebug <span class="st">&quot;Until next time&quot;</span></span></code></pre></div>
 </div>
 <p>The remaining <code>main</code> function, parses arguments and passes those on to the <code>run</code> function.</p>
 <div class="named-code-block">
 <p>«main»</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> run <span class="op">=&lt;&lt;</span> execParser opts</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">where</span> opts <span class="ot">=</span> info (parseArgs <span class="op">&lt;**&gt;</span> helper)</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>                    ( fullDesc</span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> progDesc <span class="st">&quot;Print a greeting.&quot;</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> header <span class="st">&quot;hello - a test for optparse-applicative, with sub-commands&quot;</span> )</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode haskell"><code class="sourceCode haskell"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ot">main ::</span> <span class="dt">IO</span> ()</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>main <span class="ot">=</span> run <span class="op">=&lt;&lt;</span> execParser opts</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">where</span> opts <span class="ot">=</span> info (parseArgs <span class="op">&lt;**&gt;</span> helper)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>                    ( fullDesc</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> progDesc <span class="st">&quot;Print a greeting.&quot;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>                   <span class="op">&lt;&gt;</span> header <span class="st">&quot;hello - a test for optparse-applicative, with sub-commands&quot;</span> )</span></code></pre></div>
 </div>
 </section>
         </div>

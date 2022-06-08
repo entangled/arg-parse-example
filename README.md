@@ -20,10 +20,10 @@ Let's build a small greeter program to see how to make this work. We get a proje
 
 Here, module `Commands.Common` contains options that are used by all other sub-commands, and `Commands.Goodbye` and `Commands.Hello` are the two actual sub-commands.
 
-There is a catch-all solution, namely parsing your options to `IO ()` and then `join` the resulting IO action after parsing. Somehow, this solution vibes me the wrong way.
+There is a catch-all solution, namely parsing your options to `IO ()` and then `join` the resulting IO action after parsing. Somehow, this solution vibes me the wrong way. I rather parse to an actual data structure that reflects the possible options and go from there.
 
 ## The `Common` module
-Now, we suppose that the options in the `Common` section may also effect code in `Goodbye` and `Hello` in such a way that each sub-command needs to have the common information at hand. This means that `Hello` and `Goodbye` import from `Common` but we need a argument sum-datatype that contains either `Hello` or `Goodbye` specific arguments. Note however, that circular imports are not possible in Haskell. We'll have to abstract out the command-specific bits fromm `Common`.
+Now, we suppose that the options in the `Common` section may also effect code in `Goodbye` and `Hello` in such a way that each sub-command needs to have the common information at hand. This means that `Hello` and `Goodbye` import from `Common` but we need a argument sum-datatype that contains either `Hello` or `Goodbye` specific arguments. Note however, that circular imports are not possible in Haskell. We'll have to abstract out the command-specific bits from `Common`.
 
 ``` {.haskell file=app/Commands/Common.hs}
 module Commands.Common where
@@ -134,19 +134,20 @@ import qualified Commands.Hello as Hello
 import qualified Commands.Goodbye as Goodbye
 
 data SubCommand
-    = CmdHello Hello.Args
+    = NoCommand
+    | CmdHello Hello.Args
     | CmdGoodbye Goodbye.Args
 
 parseArgs :: Parser (Common.Args SubCommand)
 parseArgs = Common.Args
     <$> switch (long "version" <> short 'v' <> help "Show version.")
     <*> switch (long "verbose" <> short 'V' <> help "Be verbose.")
-    <*> subparser
-        (  command "hello"   (info (CmdHello <$> Hello.parseArgs)
+    <*> ( subparser
+          (  command "hello"   (info (CmdHello <$> Hello.parseArgs)
                                    (progDesc "Say Hello"))
-        <> command "goodbye" (info (CmdGoodbye <$> Goodbye.parseArgs)
-                                   (progDesc "Say Goodbye"))
-        )
+          <> command "goodbye" (info (CmdGoodbye <$> Goodbye.parseArgs)
+                                   (progDesc "Say Goodbye")) )
+       <|> pure NoCommand )
 ```
 
 The environment structure will only contain the logger function here.
@@ -160,11 +161,30 @@ instance HasLogFunc App where
     logFuncL = lens logFunc' (\x y -> x { logFunc' = y })
 ```
 
+Add two escape hatches for printing the version info and the case where no command was given.
+
+``` {.haskell #main}
+printVersion :: IO ()
+printVersion = do
+    Common.print
+        "hello (Entangled example program) 1.0\n\
+        \Copyright © 2022 Netherlands eScience Center.\n\
+        \Licensed under the Apache License, Version 2.0.\n"
+    exitSuccess
+
+printNoCommand :: (MonadIO m) => m ()
+printNoCommand = do
+    Common.print
+        "No command given. Run `hello -h` or `hello --help` to see usage.\n"
+    exitFailure
+```
+
 To dispatch to the correct sub-command runner, we replace the `Common.Args SubCommand` record with a `Common.Args Hello.Args` (or `Goodbye` equivalent). This is done using record update syntax.
 
 ``` {.haskell #main}
 run :: Common.Args SubCommand -> IO ()
 run args = do
+    when (Common.versionFlag args) printVersion
     logOptions <- setLogUseTime True
               <$> logOptionsHandle stderr (Common.verboseFlag args)
     withLogFunc logOptions $ \lf -> do
@@ -173,6 +193,7 @@ run args = do
             case Common.subArgs args of
                 CmdHello   x -> Hello.run   (args { Common.subArgs = x })
                 CmdGoodbye x -> Goodbye.run (args { Common.subArgs = x })
+                NoCommand    -> printNoCommand
             logDebug "Until next time"
 ```
 
